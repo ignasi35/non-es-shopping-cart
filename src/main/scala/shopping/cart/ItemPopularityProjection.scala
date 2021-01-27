@@ -1,4 +1,4 @@
-// tag::projection[]
+
 package shopping.cart
 
 import akka.actor.typed.ActorSystem
@@ -14,11 +14,11 @@ import akka.projection.{ ProjectionBehavior, ProjectionId }
 import shopping.cart.repository.{ ItemPopularityRepository, ScalikeJdbcSession }
 
 object ItemPopularityProjection {
-  // tag::howto-read-side-without-role[]
+
   def init(
       system: ActorSystem[_],
       repository: ItemPopularityRepository): Unit = {
-    ShardedDaemonProcess(system).init( // <1>
+    ShardedDaemonProcess(system).init(
       name = "ItemPopularityProjection",
       ShoppingCart.tags.size,
       index =>
@@ -26,29 +26,29 @@ object ItemPopularityProjection {
       ShardedDaemonProcessSettings(system),
       Some(ProjectionBehavior.Stop))
   }
-  // end::howto-read-side-without-role[]
+
 
   private def createProjectionFor(
       system: ActorSystem[_],
       repository: ItemPopularityRepository,
       index: Int)
-      : ExactlyOnceProjection[Offset, EventEnvelope[ShoppingCart.Event]] = {
-    val tag = ShoppingCart.tags(index) // <2>
+      : ExactlyOnceProjection[Offset, EventEnvelope[ShoppingCart.State]] = {
+    val tag = ShoppingCart.tags(index)
 
     val sourceProvider
-        : SourceProvider[Offset, EventEnvelope[ShoppingCart.Event]] = // <3>
-      EventSourcedProvider.eventsByTag[ShoppingCart.Event](
+        : SourceProvider[Offset, EventEnvelope[ShoppingCart.State]] =
+      EventSourcedProvider.eventsByTag[ShoppingCart.State](
         system = system,
-        readJournalPluginId = JdbcReadJournal.Identifier, // <4>
+        readJournalPluginId = JdbcReadJournal.Identifier,
         tag = tag)
 
-    JdbcProjection.exactlyOnce( // <5>
+    JdbcProjection.exactlyOnce(
       projectionId = ProjectionId("ItemPopularityProjection", tag),
       sourceProvider,
       handler = () =>
-        new ItemPopularityProjectionHandler(tag, system, repository), // <6>
+        new ItemPopularityProjectionHandler(tag, system, repository),
       sessionFactory = () => new ScalikeJdbcSession())(system)
   }
 
 }
-// end::projection[]
+

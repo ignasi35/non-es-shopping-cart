@@ -26,7 +26,7 @@ class ShoppingCartSpec
   private val eventSourcedTestKit =
     EventSourcedBehaviorTestKit[
       ShoppingCart.Command,
-      ShoppingCart.Event,
+      ShoppingCart.State,
       ShoppingCart.State](system, ShoppingCart(cartId, "carts-0"))
 
   override protected def beforeEach(): Unit = {
@@ -43,7 +43,7 @@ class ShoppingCartSpec
       result1.reply should ===(
         StatusReply.Success(
           ShoppingCart.Summary(Map("foo" -> 42), checkedOut = false)))
-      result1.event should ===(ShoppingCart.ItemAdded(cartId, "foo", 42))
+      result1.event should ===(ShoppingCart.State(cartId, Map("foo"-> 42), None))
     }
 
     "reject already added item" in {
@@ -68,7 +68,7 @@ class ShoppingCartSpec
       result2.reply should ===(
         StatusReply.Success(
           ShoppingCart.Summary(Map.empty, checkedOut = false)))
-      result2.event should ===(ShoppingCart.ItemRemoved(cartId, "foo", 42))
+      result2.event should ===(ShoppingCart.State(cartId, Map.empty[String, Int], None))
     }
 
     "adjust quantity" in {
@@ -83,10 +83,10 @@ class ShoppingCartSpec
         StatusReply.Success(
           ShoppingCart.Summary(Map("foo" -> 43), checkedOut = false)))
       result2.event should ===(
-        ShoppingCart.ItemQuantityAdjusted(cartId, "foo", 43, 42))
+        ShoppingCart.State(cartId, Map("foo"-> 43), None))
     }
 
-    // tag::checkout[]
+
     "checkout" in {
       val result1 =
         eventSourcedTestKit.runCommand[StatusReply[ShoppingCart.Summary]](
@@ -97,17 +97,18 @@ class ShoppingCartSpec
       result2.reply should ===(
         StatusReply.Success(
           ShoppingCart.Summary(Map("foo" -> 42), checkedOut = true)))
-      result2.event.asInstanceOf[ShoppingCart.CheckedOut].cartId should ===(
-        cartId)
+      val state = result2.event.asInstanceOf[ShoppingCart.State]
+      state.cartId should ===(cartId)
+      state.checkoutDate.isDefined should ===(true)
 
       val result3 =
         eventSourcedTestKit.runCommand[StatusReply[ShoppingCart.Summary]](
           ShoppingCart.AddItem("bar", 13, _))
       result3.reply.isError should ===(true)
     }
-    // end::checkout[]
 
-    // tag::get[]
+
+
     "get" in {
       val result1 =
         eventSourcedTestKit.runCommand[StatusReply[ShoppingCart.Summary]](
@@ -119,7 +120,7 @@ class ShoppingCartSpec
       result2.reply should ===(
         ShoppingCart.Summary(Map("foo" -> 42), checkedOut = false))
     }
-    // end::get[]
+
 
     "keep its state" in {
       val result1 =

@@ -42,7 +42,7 @@ class ItemPopularityProjectionSpec
   private val projectionTestKit = ProjectionTestKit(system)
 
   private def createEnvelope(
-      event: ShoppingCart.Event,
+      event: ShoppingCart.State,
       seqNo: Long,
       timestamp: Long = 0L) =
     EventEnvelope(
@@ -54,7 +54,7 @@ class ItemPopularityProjectionSpec
 
   private def toAsyncHandler(itemHandler: ItemPopularityProjectionHandler)(
       implicit
-      ec: ExecutionContext): Handler[EventEnvelope[ShoppingCart.Event]] =
+      ec: ExecutionContext): Handler[EventEnvelope[ShoppingCart.State]] =
     eventEnvelope =>
       Future {
         itemHandler.process(session = null, eventEnvelope)
@@ -65,38 +65,40 @@ class ItemPopularityProjectionSpec
 
     "update item popularity counts by the projection" in {
 
+      val cartId789 = "a7098"
+      val cartId123 = "0d12d"
       val events =
         Source(
-          List[EventEnvelope[ShoppingCart.Event]](
+          List[EventEnvelope[ShoppingCart.State]](
             createEnvelope(
-              ShoppingCart.ItemAdded("a7098", "bowling shoes", 1),
+              ShoppingCart.State(cartId789, Map("bowling shoes"->1), None),
               0L),
             createEnvelope(
-              ShoppingCart.ItemQuantityAdjusted("a7098", "bowling shoes", 2, 1),
+              ShoppingCart.State(cartId789, Map("bowling shoes"->2), None),
               1L),
             createEnvelope(
               ShoppingCart
-                .CheckedOut("a7098", Instant.parse("2020-01-01T12:00:00.00Z")),
+                .State(cartId789,Map("bowling shoes"->2), Some( Instant.parse("2020-01-01T12:00:00.00Z"))),
               2L),
             createEnvelope(
-              ShoppingCart.ItemAdded("0d12d", "akka t-shirt", 1),
+              ShoppingCart.State(cartId123, Map("akka t-shirt"->1), None),
               3L),
-            createEnvelope(ShoppingCart.ItemAdded("0d12d", "skis", 1), 4L),
-            createEnvelope(ShoppingCart.ItemRemoved("0d12d", "skis", 1), 5L),
+            createEnvelope(ShoppingCart.State(cartId123, Map("akka t-shirt"->1, "skis"-> 1), None), 4L),
+            createEnvelope(ShoppingCart.State(cartId123,Map("akka t-shirt"->1), None), 5L),
             createEnvelope(
               ShoppingCart
-                .CheckedOut("0d12d", Instant.parse("2020-01-01T12:05:00.00Z")),
+                .State(cartId123,Map("akka t-shirt"->1), Some( Instant.parse("2020-01-01T12:05:00.00Z"))),
               6L)))
 
       val repository = new TestItemPopularityRepository
       val projectionId =
         ProjectionId("item-popularity", "carts-0")
       val sourceProvider =
-        TestSourceProvider[Offset, EventEnvelope[ShoppingCart.Event]](
+        TestSourceProvider[Offset, EventEnvelope[ShoppingCart.State]](
           events,
           extractOffset = env => env.offset)
       val projection =
-        TestProjection[Offset, EventEnvelope[ShoppingCart.Event]](
+        TestProjection[Offset, EventEnvelope[ShoppingCart.State]](
           projectionId,
           sourceProvider,
           () =>
@@ -109,8 +111,7 @@ class ItemPopularityProjectionSpec
       projectionTestKit.run(projection) {
         repository.counts shouldBe Map(
           "bowling shoes" -> 2,
-          "akka t-shirt" -> 1,
-          "skis" -> 0)
+          "akka t-shirt" -> 1)
       }
     }
   }

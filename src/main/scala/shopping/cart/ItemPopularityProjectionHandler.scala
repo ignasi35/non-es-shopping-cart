@@ -1,4 +1,4 @@
-// tag::handler[]
+
 package shopping.cart
 
 import akka.actor.typed.ActorSystem
@@ -12,35 +12,23 @@ class ItemPopularityProjectionHandler(
     system: ActorSystem[_],
     repo: ItemPopularityRepository)
     extends JdbcHandler[
-      EventEnvelope[ShoppingCart.Event],
-      ScalikeJdbcSession]() { // <1>
+      EventEnvelope[ShoppingCart.State],
+      ScalikeJdbcSession]() {
 
   private val log = LoggerFactory.getLogger(getClass)
 
   override def process(
       session: ScalikeJdbcSession,
-      envelope: EventEnvelope[ShoppingCart.Event]): Unit = { // <2>
-    envelope.event match { // <3>
-      case ShoppingCart.ItemAdded(_, itemId, quantity) =>
-        repo.update(session, itemId, quantity)
-        logItemCount(session, itemId)
+      envelope: EventEnvelope[ShoppingCart.State]): Unit = {
+    envelope.event match {
+        // update popularity only on checkout (checkout date is set)
+      case ShoppingCart.State(_, items, Some(_)) =>
+        items.foreach{case (item, q) =>
+        repo.update(session, item, q)
+        logItemCount(session, item)
+        }
 
-      // end::handler[]
-      case ShoppingCart.ItemQuantityAdjusted(
-            _,
-            itemId,
-            newQuantity,
-            oldQuantity) =>
-        repo.update(session, itemId, newQuantity - oldQuantity)
-        logItemCount(session, itemId)
-
-      case ShoppingCart.ItemRemoved(_, itemId, oldQuantity) =>
-        repo.update(session, itemId, 0 - oldQuantity)
-        logItemCount(session, itemId)
-
-      // tag::handler[]
-
-      case _: ShoppingCart.CheckedOut =>
+      case _=>
     }
   }
 
@@ -55,4 +43,4 @@ class ItemPopularityProjectionHandler(
   }
 
 }
-// end::handler[]
+

@@ -65,15 +65,19 @@ class ItemPopularityIntegrationSpec
       val sharding = ClusterSharding(system)
       val cartId1 = "cart1"
       val cartId2 = "cart2"
+      val cartId3 = "cart3"
       val item1 = "item1"
       val item2 = "item2"
 
       val cart1 = sharding.entityRefFor(ShoppingCart.EntityKey, cartId1)
       val cart2 = sharding.entityRefFor(ShoppingCart.EntityKey, cartId2)
+      val cart3 = sharding.entityRefFor(ShoppingCart.EntityKey, cartId3)
 
       val reply1: Future[ShoppingCart.Summary] =
         cart1.askWithStatus(ShoppingCart.AddItem(item1, 3, _))
       reply1.futureValue.items.values.sum should ===(3)
+
+      cart1.askWithStatus(ShoppingCart.Checkout)
 
       eventually {
         ScalikeJdbcSession.withSession { session =>
@@ -82,13 +86,15 @@ class ItemPopularityIntegrationSpec
       }
 
       val reply2: Future[ShoppingCart.Summary] =
-        cart1.askWithStatus(ShoppingCart.AddItem(item2, 5, _))
-      reply2.futureValue.items.values.sum should ===(3 + 5)
+        cart3.askWithStatus(ShoppingCart.AddItem(item2, 5, _))
+      reply2.futureValue.items.values.sum should ===(5)
       // another cart
       val reply3: Future[ShoppingCart.Summary] =
         cart2.askWithStatus(ShoppingCart.AddItem(item2, 4, _))
       reply3.futureValue.items.values.sum should ===(4)
 
+      cart2.askWithStatus(ShoppingCart.Checkout)
+      cart3.askWithStatus(ShoppingCart.Checkout)
       eventually {
         ScalikeJdbcSession.withSession { session =>
           itemPopularityRepository.getItem(session, item2).value should ===(
